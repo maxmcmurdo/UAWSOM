@@ -361,10 +361,11 @@ contains
 
     do ix1 = ixImin1,ixImax1
       if (abs(wres(ix1,fl%e_)) > 25.d0) then
-        if (xprobmax1 > 1.5d0 .and. x(ix1,1) > 1.2d0) then
+        !if (mype == 7) then      
+          write(*,*) "it = ", it
           write(*,*) "TC turned off at x = ", x(ix1,1)
           write(*,*) "TC value was       = ", wres(ix1,fl%e_)
-        end if 
+        !end if
         wres(ix1,fl%e_) = 0.d0
       end if 
     end do
