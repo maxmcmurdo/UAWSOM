@@ -1318,12 +1318,8 @@ module mod_radiative_cooling
       
       zeta0 = 5.0d0
 
-      !zeta(ixI^S) = zeta0*exp(-(x(ixI^S,1)-xprobmin1)/5.d0)
-      zeta(ixI^S) = (zeta0-1.d0)*exp(-(x(ixI^S,1)-xprobmin1)/5.d0)+1.d0
-      !where(zeta(ixI^S) < 1.d0)
-      !  zeta(ixI^S) = 1.d0
-      !end where
-
+      zeta(ixI^S) = (zeta0-1.d0)*exp(-(x(ixI^S,1)-xprobmin1)/5.d0)+1.d0 !> MAX: Open field regions
+      !zeta(ixI^S) = (zeta0-1.d0)*exp(-((xprobmax1-xprobmin1)/dpi * sin(dpi * (x(ixI^S,1)-xprobmin1)/(xprobmax1-xprobmin1)))/5.d0)+1.d0 !> MAX: 1D Loops
     end subroutine get_zeta
 
     subroutine cooling_get_dt(w,ixI^L,ixO^L,dtnew,dx^D,x,fl)
@@ -1356,7 +1352,9 @@ module mod_radiative_cooling
          rholocal = rho(ix^D)
          call get_zeta(w,x,ixI^L,ixO^L,zeta)
          rholocal_e = rholocal*(1+zeta(ix^D)*ff-ff)**(-1.d0)
-         rholocal_i = zeta(ix^D)*rholocal_e
+         !rholocal_i = zeta(ix^D)*rholocal_e
+         rholocal_i = rholocal*(ff + (1-ff)/zeta(ix^D))**(-1.d0)
+
          !  Tlocal = P/rho
          Tlocal1       = max(plocal/(Rfactor(ix^D) * rholocal),smalldouble)
          !  Determine explicit cooling
@@ -1416,7 +1414,9 @@ module mod_radiative_cooling
          rholocal = rho(ix^D)
          call get_zeta(w,x,ixI^L,ixO^L,zeta)
          rholocal_e = rholocal*(1+zeta(ix^D)*ff-ff)**(-1.d0)
-         rholocal_i = zeta(ix^D)*rholocal_e
+         !rholocal_i = zeta(ix^D)*rholocal_e
+         rholocal_i = rholocal*(ff + (1-ff)/zeta(ix^D))**(-1.d0)
+
          !  Tlocal = P/rho
          Tlocal1       = max(plocal/(rholocal * Rfactor(ix^D)),smalldouble)
          !
@@ -1480,7 +1480,13 @@ module mod_radiative_cooling
          rholocal = rho(ix^D)
          call get_zeta(w,x,ixI^L,ixO^L,zeta)
          rholocal_e = rholocal*(1+zeta(ix^D)*ff-ff)**(-1.d0)
-         rholocal_i = zeta(ix^D)*rholocal_e
+         !rholocal_i = zeta(ix^D)*rholocal_e
+         rholocal_i = rholocal*(ff + (1-ff)/zeta(ix^D))**(-1.d0)
+
+         !if(mod(it,1000)==0.and.mype==0)then 
+         !  write(*,*)"zeta(ix^D) = ", zeta(ix^D)
+         !end if
+
          tlocal1  = max(plocal/(rholocal*Rfactor(ix^D)), smalldouble)
        
          emin     = rhonew(ix^D) * fl%tlow * Rfactor(ix^D)* invgam
@@ -1629,7 +1635,13 @@ module mod_radiative_cooling
            rholocal = rho(ix^D)
            call get_zeta(w,x,ixI^L,ixO^L,zeta)
            rholocal_e = rholocal*(1+zeta(ix^D)*ff-ff)**(-1.d0)
-           rholocal_i = zeta(ix^D)*rholocal_e
+           !rholocal_i = zeta(ix^D)*rholocal_e
+           rholocal_i = rholocal*(ff + (1-ff)/zeta(ix^D))**(-1.d0)
+
+            !if(mod(it,1000)==0.and.mype==0)then 
+            !   write(*,*)"zeta(ix^D) = ", zeta(ix^D)
+            !end if
+
            if(phys_trac) then
              ttofflocal=block%wextra(ix^D,fl%Tcoff_)
            end if
@@ -1680,7 +1692,9 @@ module mod_radiative_cooling
            rholocal = rho(ix^D)
            call get_zeta(w,x,ixI^L,ixO^L,zeta)
            rholocal_e = rholocal*(1+zeta(ix^D)*ff-ff)**(-1.d0)
-           rholocal_i = zeta(ix^D)*rholocal_e
+           !rholocal_i = zeta(ix^D)*rholocal_e
+           rholocal_i = rholocal*(ff + (1-ff)/zeta(ix^D))**(-1.d0)
+
            if(phys_trac) then
              ttofflocal=block%wextra(ix^D,fl%Tcoff_)
            end if
@@ -1746,7 +1760,9 @@ module mod_radiative_cooling
          rholocal = rho(ix^D)
          call get_zeta(w,x,ixI^L,ixO^L,zeta)
          rholocal_e = rholocal*(1+zeta(ix^D)*ff-ff)**(-1.d0)
-         rholocal_i = zeta(ix^D)*rholocal_e
+         !rholocal_i = zeta(ix^D)*rholocal_e
+         rholocal_i = rholocal*(ff + (1-ff)/zeta(ix^D))**(-1.d0)
+
          if(phys_trac) then
            ttofflocal=block%wextra(ix^D,fl%Tcoff_)
          end if
@@ -1838,7 +1854,9 @@ module mod_radiative_cooling
          rholocal = rho(ix^D)
          call get_zeta(w,x,ixI^L,ixO^L,zeta)
          rholocal_e = rholocal*(1+zeta(ix^D)*ff-ff)**(-1.d0)
-         rholocal_i = zeta(ix^D)*rholocal_e
+         !rholocal_i = zeta(ix^D)*rholocal_e
+         rholocal_i = rholocal*(ff + (1-ff)/zeta(ix^D))**(-1.d0)
+
          
          if(phys_trac) then
            ttofflocal=block%wextra(ix^D,fl%Tcoff_)
@@ -1954,7 +1972,9 @@ module mod_radiative_cooling
          rholocal = rho(ix^D)
          call get_zeta(w,x,ixI^L,ixO^L,zeta)
          rholocal_e = rholocal*(1+zeta(ix^D)*ff-ff)**(-1.d0)
-         rholocal_i = zeta(ix^D)*rholocal_e
+         !rholocal_i = zeta(ix^D)*rholocal_e
+         rholocal_i = rholocal*(ff + (1-ff)/zeta(ix^D))**(-1.d0)
+
          if(phys_trac) then
            ttofflocal=block%wextra(ix^D,fl%Tcoff_)
          end if
@@ -2043,7 +2063,9 @@ module mod_radiative_cooling
          rholocal = rho(ix^D)
          call get_zeta(w,x,ixI^L,ixO^L,zeta)
          rholocal_e = rholocal*(1+zeta(ix^D)*ff-ff)**(-1.d0)
-         rholocal_i = zeta(ix^D)*rholocal_e
+         !rholocal_i = zeta(ix^D)*rholocal_e
+         rholocal_i = rholocal*(ff + (1-ff)/zeta(ix^D))**(-1.d0)
+
          if(phys_trac) then
            ttofflocal=block%wextra(ix^D,fl%Tcoff_)
          end if
@@ -2137,7 +2159,13 @@ module mod_radiative_cooling
          rholocal = rho(ix^D)
          call get_zeta(w,x,ixI^L,ixO^L,zeta)
          rholocal_e = rholocal*(1+zeta(ix^D)*ff-ff)**(-1.d0)
-         rholocal_i = zeta(ix^D)*rholocal_e
+         !rholocal_i = zeta(ix^D)*rholocal_e
+         rholocal_i = rholocal*(ff + (1-ff)/zeta(ix^D))**(-1.d0)
+
+         !if(mod(it,1000)==0.and.mype==0)then 
+         !   write(*,*)"zeta(ix^D) = ", zeta(ix^D)
+         !end if
+
          if(phys_trac) then
            ttofflocal=block%wextra(ix^D,fl%Tcoff_)
          end if
