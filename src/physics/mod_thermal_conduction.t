@@ -337,16 +337,19 @@ contains
     !  end if
     !end do
 
-    do ix1 = ixImin1,ixImax1
-      if (abs(wres(ix1,fl%e_)) > 25.d0) then
-        !if (mype == 7) then      
-          write(*,*) "it                 = ", it
-          write(*,*) "TC turned off at x = ", x(ix1,1)
-          write(*,*) "TC value was       = ", wres(ix1,fl%e_)
-        !end if
-        wres(ix1,fl%e_) = 0.d0
-      end if 
-    end do
+    !> Thermal conduction filter: The value 25.d0 must be chosen accordingly (based on user defined resolution)
+    !> to avoid noise induced resolution dependence on solution
+
+    !do ix1 = ixImin1,ixImax1
+    !  if (abs(wres(ix1,fl%e_)) > 25.d0) then
+    !    !if (mype == 7) then      
+    !      write(*,*) "it                 = ", it
+    !      write(*,*) "TC turned off at x = ", x(ix1,1)
+    !      write(*,*) "TC value was       = ", wres(ix1,fl%e_)
+    !    !end if
+    !    wres(ix1,fl%e_) = 0.d0
+    !  end if 
+    !end do
 
     !if (mod(it,1000) == 0 .and. mype==0) then
     !  write(*,*) "mype = ", mype
