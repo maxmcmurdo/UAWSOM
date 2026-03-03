@@ -3497,20 +3497,11 @@ contains
     logical, intent(inout) :: active
     double precision                :: v(ixI^S,1:ndir)
     double precision                :: divv(ixI^S),Lperp(ixI^S),Lperp_AW(ixI^S),Gamma_minus(ixI^S),Gamma_plus(ixI^S),R(ixI^S),radius(ixI^S),zeta(ixI^S),pth(ixI^S),B(ixI^S,3)
-    double precision :: Bsqr(ixI^S),vA(ixI^S),gvA(ixI^S),gradvA(ixI^S),refvA(ixI^S),Bfix(ixI^S),lnvA(ixI^S),lnrho(ixI^S), gradlnvA(ixI^S) 
-    integer :: half_window, ix1, ix2
-    double precision :: smoothed_rho(ixI^S), sum_rho
-
-    !> may use these later: ,B2(ixI^S),vA(ixI^S),gvA(ixI^S),gradvA(ixI^S),refvA(ixI^S)
-
-    !if (mod(it,1000)==0 .and. mype==0) then
-    !  write(*,*) 'qt = ', qt
-    !end if
 
     if(B0field) then
-      B(ixO^S,1:ndir)=w(ixO^S,mag(1:ndir))+block%B0(ixO^S,1:ndir,1)
+      B(ixO^S,1:ndir)=wCT(ixO^S,mag(1:ndir))+block%B0(ixO^S,1:ndir,0)
     else
-      B(ixO^S,1:ndir)=w(ixO^S,mag(1:ndir))
+      B(ixO^S,1:ndir)=wCT(ixO^S,mag(1:ndir))
     end if
     
     !radius(ixO^S) = 1.d8/unit_length * ((Busr/unit_magneticfield)/(B(ixO^S,1)))**0.5d0 !Radius = R_0*(B0/B)^0.5 TVD 2025 paper uses R_0 = 1Mm (1e8 cm) > Used for 1D simulations 
@@ -3518,16 +3509,11 @@ contains
     !> Below works fine for 1-3D.
     radius(ixO^S) = 1.d8/unit_length * ((Busr/unit_magneticfield)/((B(ixO^S,1)**2.d0 + B(ixO^S,2)**2 + B(ixO^S,3)**2)**0.5d0))**0.5d0 
     
-    !radius(ixO^S) = 1.d8/unit_length * ... !> MAX TODO: Take into account that B0 has more than one component in higher (than 1D) dimensions
-                                            !> Magnetic field set in mod_usr, this dictates radius which dictates Lperp and hence wave dissipation along field line rather than just height (1D)
-
     if(qsourcesplit .eqv. .false.) then
       active = .true.
     endif
 
     call uawsom_get_v(wCT,x,ixI^L,ixI^L,v)
-    !call uawsom_get_pthermal_origin(w,x,ixI^L,ixO^L,pth)
-    !pth(ixO^S) = pth(ixO^S)/w(ixO^S,rho_)
 
     if(slab_uniform) then
       if(nghostcells .gt. 2) then
@@ -3540,31 +3526,9 @@ contains
     end if
 
     call get_zeta(w,x,ixI^L,ixI^L,zeta)
-
-    !B2(ixO^S)=sum((Btotal(ixO^S,:))**2,dim=ndim+1)
-    !Bsqr(ixO^S) = B(ixO^S,1)**(2.d0)
-
-    do ix1 = ixImin1,ixImin1+1
-      B(ix1^%1ixO^S,1) = B(ixOmin1^%1ixO^S,1) !> ixOmin1^%1ixO^S
-    end do
-
-    do ix1 = ixImax1-1,ixImax1  
-      B(ix1^%1ixO^S,1) = B(ixOmax1^%1ixO^S,1)
-    end do
-
-    ! output Alfven wave speed B/sqrt(rho)
-    vA(ixI^S) = B(ixI^S,1)/dsqrt(w(ixI^S,rho_))
-
-    lnvA(ixI^S) = log(vA(ixI^S))
-    !lnrho(ixI^S) = log(w(ixI^S,rho_))
-
-    call gradient(lnvA,ixI^L,ixO^L,ndim,gradlnvA)
-    !call gradient(vA,ixI^L,ixO^L,ndim,gradvA)
-    !call gradient(lnrho,ixI^L,ixO^L,ndim,gradlnrho)
     
     Lperp(ixO^S) = (zeta(ixO^S) + 1.d0 - ff)**(3.d0/2.d0)/(1.d0 - ff**(5.d0/2.d0))/&
                   (zeta(ixO^S) - 1.d0)*3.1622776*(ff*dpi)**0.5d0*radius(ixO^S) !/min(pth(ixO^S),1.d0) 
-
 
     ! Max: This is the last term in Eqn. 78 TVD 2024 contribution due to AWs is zero since mu*rho*alpha**2-1 = 0
     w(ixO^S,e_) = w(ixO^S,e_)-qdt*(zeta(ixO^S)-1.d0)/(zeta(ixO^S)+1.d0)*(zeta(ixO^S)+1.d0)*(wCT(ixO^S,wkplus_) + wCT(ixO^S,wkminus_))/4.d0*divv(ixO^S) 
@@ -3572,46 +3536,12 @@ contains
     w(ixO^S,wkplus_)  = w(ixO^S,wkplus_)  - qdt*(divv(ixO^S)*wCT(ixO^S,wkplus_)/2.d0  + wCT(ixO^S,wkplus_)**(3.d0/2.d0)/(wCT(ixO^S,rho_)*(1+ff*zeta(ixO^S)-ff)**(-1.d0))**0.5d0/Lperp(ixO^S))
     w(ixO^S,wkminus_) = w(ixO^S,wkminus_) - qdt*(divv(ixO^S)*wCT(ixO^S,wkminus_)/2.d0 + wCT(ixO^S,wkminus_)**(3.d0/2.d0)/(wCT(ixO^S,rho_)*(1+ff*zeta(ixO^S)-ff)**(-1.d0))**0.5d0/Lperp(ixO^S))
 
-    call uawsom_get_pthermal(w,x,ixI^L,ixI^L,pth)
-    Tmp(ixO^S) = pth(ixO^S)/w(ixO^S,rho_)
-
-    !Lperp_AW(ixO^S) = (1/1.d8) * 1.5d5 * 1.0d2 * (Tmp(ixO^S) / B(ixO^S,1))**0.5d0 !> Fine in 1D VDH14 implementation
-    Lperp_AW(ixO^S) = (1/1.d8) * 1.5d5 * 1.0d2 * (Tmp(ixO^S) / ((B(ixO^S,1)**2.d0 + B(ixO^S,2)**2 + B(ixO^S,3)**2)**0.5d0))**0.5d0 !> MAX TODO: Take into account multicomponent magnetic field 
+    Lperp_AW(ixO^S) = (1/1.d8) * 1.5d5 * 1.0d2 * (1.d0/ ((B(ixO^S,1)**2.d0 + B(ixO^S,2)**2 + B(ixO^S,3)**2)**0.5d0))**0.5d0
 
     !Lperp_AW(ixO^S) = 0.01d0*(20.0d0/B(ixO^S,1))**0.5d0 !> Cooper Downs Lperp_AW (they performed parameter study varying 0.01 - 0.07 to control AW damping)
 
     Gamma_plus(ixO^S) = (2.0d0 / Lperp_AW(ixO^S)) * (w(ixO^S, wAminus_)/w(ixO^S,rho_))**0.5d0
     Gamma_minus(ixO^S) = (2.0d0 / Lperp_AW(ixO^S)) * (w(ixO^S, wAplus_)/w(ixO^S,rho_))**0.5d0
-
-    !> Reflection 1D working, edit 0.5d0 value for reflection sigma in McMurdo et al. 2025
-    !do ix1 = ixOmin1,ixOmax1
-      !refvA(ix1) = min(vA(ix1)*gradlnvA(ix1), max(Gamma_plus(ix1),Gamma_minus(ix1))) 
-    !  refvA(ix1^%1ixO^S) = vA(ix1^%1ixO^S)*gradlnvA(ix1^%1ixO^S)*0.5d0 !> Note vA*grad(ln(vA)) = gradvA in 1D
-    !end do
-  
-    !> Single reflection ie waves cannot be re-reflected as per VDH2014 with moving frame taken into account (large upflows increase reflection) MAX TODO: This breaks in 2D(+) due to 1D reflection implementation
-    !do ix1 = ixOmin1, ixOmax1 
-    !  w(ix1^%1ixO^S,wAminus_) = w(ix1^%1ixO^S,wAminus_) - qdt*(divv(ix1^%1ixO^S)*wCT(ix1^%1ixO^S,wAminus_)/2.0d0 + wCT(ix1^%1ixO^S,wAminus_)*Gamma_minus(ix1^%1ixO^S) + ((w(ix1^%1ixO^S,mom(1)) + vA(ix1^%1ixO^S))/vA(ix1^%1ixO^S))*refvA(ix1^%1ixO^S)*wCT(ix1^%1ixO^S,wAminus_))
-    ! w(ix1^%1ixO^S,wAplus_)  = w(ix1^%1ixO^S,wAplus_)  - qdt*(divv(ix1^%1ixO^S)*wCT(ix1^%1ixO^S,wAplus_)/2.0d0 + wCT(ix1^%1ixO^S,wAplus_)*Gamma_plus(ix1^%1ixO^S) - ((w(ix1^%1ixO^S,mom(1)) + vA(ix1^%1ixO^S))/vA(ix1^%1ixO^S))*refvA(ix1^%1ixO^S)*wCT(ix1^%1ixO^S,wAminus_))
-    !end do
-    
-    !> MAX TODO: Add reflection for 2D
-    !do ix1=ixOmin1,ixOmax1
-    !  do ix2=ixOmin2,ixOmax2
-    !    w(ix1,ix2,wAminus_) = w(ix1,ix2,wAminus_) - qdt*(divv(ix1,ix2)*wCT(ix1,ix2,wAminus_)/2.0d0 + wCT(ix1,ix2,wAminus_)*Gamma_minus(ix1,ix2) + (((w(ix1,ix2,ix3,mom(1))**2.d0+w(ix1,ix2,ix3,mom(2))**2.d0)**0.5d0 + vA(ix1,ix2))/vA(ix1,ix2)*refvA(ix1,ix2))*wCT(ix1,ix2,wAminus_))
-    !    w(ix1,ix2,wAplus_)  = w(ix1,ix2,wAplus_)  - qdt*(divv(ix1,ix2)*wCT(ix1,ix2,wAplus_)/2.0d0 + wCT(ix1,ix2,wAplus_)*Gamma_plus(ix1,ix2))
-    !  end do
-    !end do
-
-    !> MAX TODO: Add reflection for 3D
-    !do ix1=ixOmin1,ixOmax1
-    !  do ix2=ixOmin2,ixOmax2
-    !    do ix3=ixOmin3,ixOmax3 
-    !       w(ix1,ix2,ix3,wAminus_) = w(ix1,ix2,ix3,wAminus_) - qdt*(divv(ix1,ix2,ix3)*wCT(ix1,ix2,ix3,wAminus_)/2.0d0 + wCT(ix1,ix2,ix3,wAminus_)*Gamma_minus(ix1,ix2,ix3) + ((w(ix1,ix2,ix3,mom(1))**2.d0+w(ix1,ix2,ix3,mom(2))**2.d0 + w(ix1,ix2,ix3,mom(3) + vA(ix1^%1ixO^S))/vA(ix1^%1ixO^S))*refvA(ix1^%1ixO^S)*wCT(ix1^%1ixO^S,wAminus_))
-    !       w(ix1,ix2,ix3,wAplus_)  = w(ix1,ix2,ix3,wAplus_)  - qdt*(divv(ix1,ix2,ix3)*wCT(ix1,ix2,ix3,wAplus_)/2.0d0 + wCT(ix1,ix2,ix3,wAplus_)*Gamma_plus(ix1,ix2,ix3))
-    !    end do
-    !  end do
-    !end do
 
     !> AW evolution no reflection
     w(ixO^S,wAminus_) = w(ixO^S,wAminus_) - qdt*(divv(ixO^S)*wCT(ixO^S,wAminus_)/2.0d0 + wCT(ixO^S,wAminus_)*Gamma_minus(ixO^S))
@@ -3696,8 +3626,7 @@ contains
     double precision, intent(in)  :: w(ixI^S,1:nw),x(ixI^S,1:ndim)
     double precision, intent(out) :: zeta(ixI^S)
     
-    zeta(ixI^S) = (zeta0-1.d0)*exp(-(x(ixI^S,1)-xprobmin1)/5.d0)+1.d0 !> MAX: Open field MAX TODO: Should we have a better representation for this expansion with distance along a field line rather than just height? (for 2D+)
-    !zeta(ixI^S) = (zeta0-1.d0)*exp(-((xprobmax1-xprobmin1)/dpi * sin(dpi * (x(ixI^S,1)-xprobmin1)/(xprobmax1-xprobmin1)))/5.d0)+1.d0 !> MAX: 1D Loops
+    zeta(ixI^S) = (zeta0-1.d0)*exp(-(x(ixI^S,1)-xprobmin1)/5.d0)+1.d0 
   
   end subroutine get_zeta
 
