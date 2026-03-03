@@ -3540,8 +3540,8 @@ contains
 
     !Lperp_AW(ixO^S) = 0.01d0*(20.0d0/B(ixO^S,1))**0.5d0 !> Cooper Downs Lperp_AW (they performed parameter study varying 0.01 - 0.07 to control AW damping)
 
-    Gamma_plus(ixO^S) = (2.0d0 / Lperp_AW(ixO^S)) * (wCT(ixO^S, wAminus_)/w(ixO^S,rho_))**0.5d0
-    Gamma_minus(ixO^S) = (2.0d0 / Lperp_AW(ixO^S)) * (wCT(ixO^S, wAplus_)/w(ixO^S,rho_))**0.5d0
+    Gamma_plus(ixO^S) = (2.0d0 / Lperp_AW(ixO^S)) * (wCT(ixO^S, wAminus_)/wCT(ixO^S,rho_))**0.5d0
+    Gamma_minus(ixO^S) = (2.0d0 / Lperp_AW(ixO^S)) * (wCT(ixO^S, wAplus_)/wCT(ixO^S,rho_))**0.5d0
 
     !> AW evolution no reflection
     w(ixO^S,wAminus_) = w(ixO^S,wAminus_) - qdt*(divv(ixO^S)*wCT(ixO^S,wAminus_)/2.0d0 + wCT(ixO^S,wAminus_)*Gamma_minus(ixO^S))
