@@ -3744,6 +3744,7 @@ contains
     
     radius(ixO^S) = 1.d8/unit_length * (0.5d0/Bmag(ixO^S))**0.5d0 !> for lmax = 5 with low res run 24x48x96, <|B_surf|> = 0.53 (unit_B)
     !> Max todo: Could potentially do <|B_surf|> here to account for numerical diffusion in surface magnetic field? 
+    !> Without field line tracing using average B is the only way to conserve flux across unresolved field lines.
 
     if(qsourcesplit .eqv. .false.) then
       active = .true.
