@@ -1513,10 +1513,7 @@ contains
 
     ! Calculate pressure = (gamma-1) * e_internal
     if(uawsom_energy) then
-      w(ixO^S,p_)=w(ixO^S,e_)*gamma_1 !> MAX: p+waves needed? Internal energy subroutine does not include wave energy contributions 
-      !w(ixO^S,p_)=gamma_1*(w(ixO^S,e_)&
-      !            -uawsom_wk_en(w,ixI^L,ixO^L)&
-      !            -uawsom_wA_en(w,ixI^L,ixO^L))
+      w(ixO^S,p_)=w(ixO^S,e_)*gamma_1 
     end if
 
     if(uawsom_boris_simplification) then
@@ -1553,10 +1550,7 @@ contains
     ! Calculate pressure = (gamma-1) * (e-ek-eb)
     if(uawsom_energy) then
       if(uawsom_internal_e) then
-        w(ixO^S,p_)=w(ixO^S,e_)*gamma_1 !> MAX p+waves
-        !w(ixO^S,p_)=gamma_1*(w(ixO^S,e_)&
-        !            -uawsom_wk_en(w,ixI^L,ixO^L)&
-        !            -uawsom_wA_en(w,ixI^L,ixO^L))
+        w(ixO^S,p_)=w(ixO^S,e_)*gamma_1 
       else
         w(ixO^S,p_)=gamma_1*(w(ixO^S,e_)&
                     -uawsom_kin_en(w,ixI^L,ixO^L,inv_rho)&
@@ -1760,10 +1754,7 @@ contains
           ! Calculate pressure = (gamma-1) * (e-ek-eb)
           if(uawsom_energy) then
             if(uawsom_internal_e) then
-              w(ixO^S,p_)=w(ixO^S,e_)*gamma_1 !> MAX p+waves
-              !w(ixO^S,p_)=gamma_1*(w(ixO^S,e_)&
-              !            -uawsom_wk_en(w,ixI^L,ixO^L)&
-              !            -uawsom_wA_en(w,ixI^L,ixO^L))
+              w(ixO^S,p_)=w(ixO^S,e_)*gamma_1 
             else
               w(ixO^S,p_)=gamma_1*(w(ixO^S,e_)&
                           -uawsom_kin_en(w,ixI^L,ixO^L)&
@@ -2541,11 +2532,11 @@ contains
     double precision, intent(in) :: w(ixI^S, 1:nw)
     double precision, intent(in) :: x(ixI^S, 1:ndim)
     double precision, intent(out):: res(ixI^S)
-    res(ixO^S)=(gamma_1*(w(ixO^S,e_)&
+    res(ixO^S)=gamma_1*(w(ixO^S,e_)&
            - uawsom_kin_en(w,ixI^L,ixO^L)&
            - uawsom_mag_en(w,ixI^L,ixO^L)&
-           - uawsom_wk_en(w,ixI^L,ixO^L))&
-           - uawsom_wA_en(w,ixI^L,ixO^L))/w(ixO^S,rho_) ! Max: added AW + Kink
+           - uawsom_wk_en(w,ixI^L,ixO^L)&
+           - uawsom_wA_en(w,ixI^L,ixO^L))/w(ixO^S,rho_) ! MAX UPDATE: typo wA was outside bracket
   end subroutine uawsom_get_temperature_from_etot
 
   !> Calculate temperature from hydrodynamic energy
@@ -2602,9 +2593,12 @@ contains
     double precision, intent(in) :: w(ixI^S, 1:nw)
     double precision, intent(in) :: x(ixI^S, 1:ndim)
     double precision, intent(out):: res(ixI^S)
+    !> MAX UPDATE: need wave energy to construct etot. Used in TC update
     res(ixO^S)=(gamma_1*(w(ixO^S,e_)&
            - uawsom_kin_en(w,ixI^L,ixO^L)&
-           - uawsom_mag_en(w,ixI^L,ixO^L)) +  block%equi_vars(ixO^S,equi_pe0_,b0i))&
+           - uawsom_mag_en(w,ixI^L,ixO^L)&
+           - uawsom_wk_en(w,ixI^L,ixO^L)&
+           - uawsom_wA_en(w,ixI^L,ixO^L)) +  block%equi_vars(ixO^S,equi_pe0_,b0i))&
             /(w(ixO^S,rho_) +block%equi_vars(ixO^S,equi_rho0_,b0i))
             
   end subroutine uawsom_get_temperature_from_etot_with_equi
@@ -2636,10 +2630,18 @@ contains
     double precision, intent(in)    :: w(ixI^S,nw)
     double precision, intent(in)    :: x(ixI^S,1:ndim)
     double precision, intent(out)   :: p(ixI^S)
+    double precision :: zeta(ixI^S)
 
     call uawsom_get_pthermal(w,x,ixI^L,ixO^L,p)
+    call get_zeta(w,x,ixI^L,ixO^L,zeta)
 
-    p(ixO^S) = p(ixO^S) + 0.5d0 * sum(w(ixO^S, mag(:))**2, dim=ndim+1)
+    !> MAX UPDATE: Need to have AW and kink pressure in total pressure 
+    !> Important in spherical or cylidrical coordinates.
+
+    p(ixO^S) = p(ixO^S) + 0.5d0 * sum(w(ixO^S, mag(:))**2, dim=ndim+1) + & 
+    (zeta(ixO^S)+1.d0)*(w(ixO^S,wkplus_)+w(ixO^S,wkminus_))/4.d0  + &
+    (w(ixO^S,wAplus_)+w(ixO^S,wAminus_))/2.d0
+
 
   end subroutine uawsom_get_p_total
 
@@ -2704,12 +2706,20 @@ contains
          f(ixO^S,e_)=w(ixO^S,mom(idim))*wC(ixO^S,e_)
          ! Max: Adding AW + Kink to flux of energy. Note: mu (magnetic permeability) = 1 in cgs so does not appear here           
       else
+        !> MAX UPDATE: e includes wave energy so mom*e already accounts for the v*wave_energy part and hence here is counted twice
+        !f(ixO^S,e_)=w(ixO^S,mom(idim))*(wC(ixO^S,e_)+ptotal(ixO^S))&
+        !   -w(ixO^S,mag(idim))*sum(w(ixO^S,mag(:))*w(ixO^S,mom(:)),dim=ndim+1)+&
+        !    w(ixO^S,wkminus_)*(w(ixO^S,mom(idim)) + w(ixO^S,mag(idim))/(w(ixO^S,rho_)*((zeta(ixO^S)+1.d0)/(2.d0*(1+ff*zeta(ixO^S)-ff))))**0.5d0)+&
+        !    w(ixO^S,wkplus_)*(w(ixO^S,mom(idim)) - w(ixO^S,mag(idim))/(w(ixO^S,rho_)*((zeta(ixO^S)+1.d0)/(2.d0*(1+ff*zeta(ixO^S)-ff))))**0.5d0)+&
+        !    w(ixO^S,wAminus_)*(w(ixO^S,mom(idim)) + w(ixO^S,mag(idim))/(w(ixO^S,rho_)**0.5d0))+&
+        !    w(ixO^S,wAplus_)*(w(ixO^S,mom(idim)) - w(ixO^S,mag(idim))/(w(ixO^S,rho_)**0.5d0))
+
         f(ixO^S,e_)=w(ixO^S,mom(idim))*(wC(ixO^S,e_)+ptotal(ixO^S))&
            -w(ixO^S,mag(idim))*sum(w(ixO^S,mag(:))*w(ixO^S,mom(:)),dim=ndim+1)+&
-            w(ixO^S,wkminus_)*(w(ixO^S,mom(idim)) + w(ixO^S,mag(idim))/(w(ixO^S,rho_)*((zeta(ixO^S)+1.d0)/(2.d0*(1+ff*zeta(ixO^S)-ff))))**0.5d0)+&
-            w(ixO^S,wkplus_)*(w(ixO^S,mom(idim)) - w(ixO^S,mag(idim))/(w(ixO^S,rho_)*((zeta(ixO^S)+1.d0)/(2.d0*(1+ff*zeta(ixO^S)-ff))))**0.5d0)+&
-            w(ixO^S,wAminus_)*(w(ixO^S,mom(idim)) + w(ixO^S,mag(idim))/(w(ixO^S,rho_)**0.5d0))+&
-            w(ixO^S,wAplus_)*(w(ixO^S,mom(idim)) - w(ixO^S,mag(idim))/(w(ixO^S,rho_)**0.5d0))
+            w(ixO^S,wkminus_)*(w(ixO^S,mag(idim))/(w(ixO^S,rho_)*((zeta(ixO^S)+1.d0)/(2.d0*(1+ff*zeta(ixO^S)-ff))))**0.5d0)+&
+            w(ixO^S,wkplus_)*(-1.0d0*w(ixO^S,mag(idim))/(w(ixO^S,rho_)*((zeta(ixO^S)+1.d0)/(2.d0*(1+ff*zeta(ixO^S)-ff))))**0.5d0)+&
+            w(ixO^S,wAminus_)*(w(ixO^S,mag(idim))/(w(ixO^S,rho_)**0.5d0))+&
+            w(ixO^S,wAplus_)*(-1.0d0*w(ixO^S,mag(idim))/(w(ixO^S,rho_)**0.5d0))
 
 
         if(uawsom_solve_eaux) f(ixO^S,eaux_)=w(ixO^S,mom(idim))*wC(ixO^S,eaux_)
@@ -2743,24 +2753,19 @@ contains
       end if
     end do
    
+    !> MAX UPDATE: correct denom for rho_0 evolution
     denom(ixO^S) = sqrt(w(ixO^S,rho_)*((zeta(ixO^S)+1.d0)/(2.d0*(1+ff*zeta(ixO^S)-ff))))
     
     ! compute flux of wkminus Q+wkminus/
-    !f(ixO^S,wkminus_)= w(ixO^S,wkminus_)*(w(ixO^S,mom(idim))+w(ixO^S,mag(idim))/(w(ixO^S,rho_)*(zeta(ixO^S)+1.d0)/2.d0)**0.5d0)
-
-    !> test 1 MAX TODO TEST: Below assumes the influence of ff non-negligible on flux but ff = 0 recovers above flux calculation
     f(ixO^S,wkminus_)= w(ixO^S,wkminus_)*(w(ixO^S,mom(idim))+w(ixO^S,mag(idim))/denom(ixO^S))
 
-    ! compute flux of wkplus Q-wkplus 
-    !f(ixO^S,wkplus_)= w(ixO^S,wkplus_)*(w(ixO^S,mom(idim))-w(ixO^S,mag(idim))/(w(ixO^S,rho_)*(zeta(ixO^S)+1.d0)/2.d0)**0.5d0)
-
-    !> test 1 MAX TODO TEST: Below assumes the influence of ff non-negligible
+    ! compute flux of wkplus 
     f(ixO^S,wkplus_)= w(ixO^S,wkplus_)*(w(ixO^S,mom(idim))-w(ixO^S,mag(idim))/denom(ixO^S))
                       
-    ! Max: compute flux of wAminus  Z+wAminus
+    ! compute flux of wAminus  Z+wAminus
     f(ixO^S,wAminus_)= w(ixO^S,wAminus_)*(w(ixO^S,mom(idim))+w(ixO^S,mag(idim))/(w(ixO^S,rho_)**0.5d0))
 
-    ! Max: compute flux of wAplus Z-wAplus
+    ! compute flux of wAplus Z-wAplus
     f(ixO^S,wAplus_)= w(ixO^S,wAplus_)*(w(ixO^S,mom(idim))-w(ixO^S,mag(idim))/(w(ixO^S,rho_)**0.5d0))
 
     if (uawsom_glm) then
@@ -2891,19 +2896,18 @@ contains
     end if
 
     ! Get flux of energy
-    ! f_i[e]=v_i*e+v_i*ptotal-b_i*(b_k*v_k) ! Max: Eqn 78 TVD 2024, inside divergence ie div((rho*v^2/2 + p/gamma-1 + B^2/2mu)v - B*v.B/mu)
-    !                                       
-    ! Max: This subtraction in the flux calculation a few lines down is because wkplus carries wave energy into the Sun
+    ! f_i[e]=v_i*e+v_i*ptotal-b_i*(b_k*v_k) ! Max: Eqn 78 TVD 2024, inside divergence ie div((rho*v^2/2 + p/gamma-1 + B^2/2mu)v - B*v.B/mu)                               
     if(uawsom_energy) then
       if (uawsom_internal_e) then
          f(ixO^S,e_)=w(ixO^S,mom(idim))*wC(ixO^S,e_)
       else
+         !> MAX UPDATE: Use tmp(ixO^S) for rho instead of raw rho to ensure valid for rho_splitting
          f(ixO^S,e_)=w(ixO^S,mom(idim))*(wC(ixO^S,e_)+ptotal(ixO^S))&
            -B(ixO^S,idim)*sum(w(ixO^S,mag(:))*w(ixO^S,mom(:)),dim=ndim+1)+&                
-            w(ixO^S,wkminus_)*B(ixO^S,idim)/((w(ixO^S,rho_)*((zeta(ixO^S)+1.d0)/(2.d0*(1+ff*zeta(ixO^S)-ff))))**0.5d0) -&
-            w(ixO^S,wkplus_)*B(ixO^S,idim)/((w(ixO^S,rho_)*((zeta(ixO^S)+1.d0)/(2.d0*(1+ff*zeta(ixO^S)-ff))))**0.5d0) +& 
-            w(ixO^S,wAminus_)*B(ixO^S,idim)/(w(ixO^S,rho_)**0.5d0) -&                          
-            w(ixO^S,wAplus_)*B(ixO^S,idim)/(w(ixO^S,rho_)**0.5d0)
+            w(ixO^S,wkminus_)*B(ixO^S,idim)/((tmp(ixO^S)*((zeta(ixO^S)+1.d0)/(2.d0*(1+ff*zeta(ixO^S)-ff))))**0.5d0) -&
+            w(ixO^S,wkplus_)*B(ixO^S,idim)/((tmp(ixO^S)*((zeta(ixO^S)+1.d0)/(2.d0*(1+ff*zeta(ixO^S)-ff))))**0.5d0) +& 
+            w(ixO^S,wAminus_)*B(ixO^S,idim)/(tmp(ixO^S)**0.5d0) -&                          
+            w(ixO^S,wAplus_)*B(ixO^S,idim)/(tmp(ixO^S)**0.5d0)
 
         if(uawsom_solve_eaux) f(ixO^S,eaux_)=w(ixO^S,mom(idim))*wC(ixO^S,eaux_)
         if (uawsom_Hall) then
@@ -2946,25 +2950,20 @@ contains
       end if
     end do
      
-    denom(ixO^S) = sqrt(w(ixO^S,rho_)*((zeta(ixO^S)+1.d0)/(2.d0*(1+ff*zeta(ixO^S)-ff))))
+    !> MAX UPDATE: Use tmp to be consistent with splitting rather than w(rho_)
+    denom(ixO^S) = sqrt(tmp(ixO^S)*((zeta(ixO^S)+1.d0)/(2.d0*(1+ff*zeta(ixO^S)-ff))))
 
     ! compute flux of wkminus
-    !f(ixO^S,wkminus_)= w(ixO^S,wkminus_)*(w(ixO^S,mom(idim))+B(ixO^S,idim)/(w(ixO^S,rho_)*(zeta(ixO^S)+1.d0)/2.d0)**0.5d0)
-
-    !> test 2 MAX TODO TEST: Below assumes the influence of ff non-negligible on flux but ff = 0 recovers above flux calculation
     f(ixO^S,wkminus_)= w(ixO^S,wkminus_)*(w(ixO^S,mom(idim))+B(ixO^S,idim)/denom(ixO^S))
 
     ! compute flux of wkplus
-    !f(ixO^S,wkplus_)= w(ixO^S,wkplus_)*(w(ixO^S,mom(idim))-B(ixO^S,idim)/(w(ixO^S,rho_)*(zeta(ixO^S)+1.d0)/2.d0)**0.5d0)
-
-    !> test 2 MAX TODO TEST: Below assumes the influence of ff non-negligible
     f(ixO^S,wkplus_)= w(ixO^S,wkplus_)*(w(ixO^S,mom(idim))-B(ixO^S,idim)/denom(ixO^S))
 
     ! Max: compute flux of wAminus
-    f(ixO^S,wAminus_)= w(ixO^S,wAminus_)*(w(ixO^S,mom(idim))+B(ixO^S,idim)/(w(ixO^S,rho_)**0.5d0))
+    f(ixO^S,wAminus_)= w(ixO^S,wAminus_)*(w(ixO^S,mom(idim))+B(ixO^S,idim)/(tmp(ixO^S)**0.5d0))
 
     ! Max: compute flux of wAplus
-    f(ixO^S,wAplus_)= w(ixO^S,wAplus_)*(w(ixO^S,mom(idim))-B(ixO^S,idim)/(w(ixO^S,rho_)**0.5d0))
+    f(ixO^S,wAplus_)= w(ixO^S,wAplus_)*(w(ixO^S,mom(idim))-B(ixO^S,idim)/(tmp(ixO^S)**0.5d0))
 
     if (uawsom_glm) then
       !f_i[psi]=Ch^2*b_{i} Eq. 24e and Eq. 38c Dedner et al 2002 JCP, 175, 645
@@ -3366,12 +3365,12 @@ contains
       if(uawsom_internal_e) then
         ! Source for solving internal energy
         active = .true.
-        call internal_energy_add_source(qdt,ixI^L,ixO^L,wCT,w,x,e_,qsourcesplit,active) !> Max updated 4/12/25
+        call internal_energy_add_source(qdt,ixI^L,ixO^L,wCT,w,x,e_)
       else
         if(uawsom_solve_eaux) then
           ! Source for auxiliary internal energy equation
           active = .true.
-          call internal_energy_add_source(qdt,ixI^L,ixO^L,wCT,w,x,eaux_,qsourcesplit,active) !> Max updated 4/12/25
+          call internal_energy_add_source(qdt,ixI^L,ixO^L,wCT,w,x,eaux_)
         endif
         if(has_equi_pe0) then
           active = .true.
@@ -3477,10 +3476,8 @@ contains
            w,x,gravity_energy,qsourcesplit,active)
     end if
 
-    if(uawsom_energy .and. .not. uawsom_internal_e) then
-      call w_add_source(qdt,ixI^L,ixO^L,wCT,&
+    call w_add_source(qdt,ixI^L,ixO^L,wCT,&
            w,x,uawsom_energy,qsourcesplit,active)
-    end if
 
     if (uawsom_cak_force) then
       call cak_add_source(qdt,ixI^L,ixO^L,wCT,w,x,uawsom_energy,qsourcesplit,active)
@@ -3555,9 +3552,7 @@ contains
 
     Bmag(ixO^S) = (B(ixO^S,1)**2.d0 + B(ixO^S,2)**2 + B(ixO^S,3)**2)**0.5d0
     
-    radius(ixO^S) = 1.d8/unit_length * (0.5d0/Bmag(ixO^S))**0.5d0 !> for lmax = 5 with low res run 24x48x96, <|B_surf|> = 0.53 (unit_B)
-                                                                   !> For dipole been using ~10 in c.u or 20 Gauss 
-    !> Max todo: Could potentially do <|B_surf|> here to account for numerical diffusion in surface magnetic field? 
+    radius(ixO^S) = 1.d8/unit_length * (0.5d0/Bmag(ixO^S))**0.5d0 
 
     if(qsourcesplit .eqv. .false.) then
       active = .true.
@@ -3567,23 +3562,12 @@ contains
       Lperp(ixO^S) = (zeta(ixO^S) + 1.d0 - ff)**(3.d0/2.d0)/(1.d0 - ff**(5.d0/2.d0))/&
                     (zeta(ixO^S) - 1.d0)*3.1622776*(ff*dpi)**0.5d0*radius(ixO^S)
 
-      Lperp_AW(ixO^S) = 0.05d0*(1.0d0/Bmag(ixO^S))**0.5d0 !> Cooper Downs Lperp_AW fix 2.d0 to base B
+      !Lperp_AW(ixO^S) = 0.05d0*(1.0d0/Bmag(ixO^S))**0.5d0 !> Cooper Downs Lperp_AW fix 2.d0 to base B
+      Lperp_AW(ixO^S) = (1.5d9/unit_length)*(1.0d0/Bmag(ixO^S))**0.5d0 !> AWSoM implementation
 
       Gamma_plus(ixO^S) = (2.0d0 / Lperp_AW(ixO^S)) * (wCT(ixO^S, wAminus_)/wCT(ixO^S,rho_))**0.5d0 
       Gamma_minus(ixO^S) = (2.0d0 / Lperp_AW(ixO^S)) * (wCT(ixO^S, wAplus_)/wCT(ixO^S,rho_))**0.5d0
-    
-      w(ixO^S,e_) = w(ixO^S,e_)-qdt*(zeta(ixO^S)-1.d0)/(zeta(ixO^S)+1.d0)*(zeta(ixO^S)+1.d0)*(wCT(ixO^S,wkplus_) + wCT(ixO^S,wkminus_))/4.d0*divv(ixO^S) 
-
-      !> AW evolution no reflection
-      !w(ixO^S,wAminus_) = w(ixO^S,wAminus_) - qdt*(divv(ixO^S)*wCT(ixO^S,wAminus_)/2.0d0 + wCT(ixO^S,wAminus_)*Gamma_minus(ixO^S)) 
-      !w(ixO^S,wAplus_)  = w(ixO^S,wAplus_)  - qdt*(divv(ixO^S)*wCT(ixO^S,wAplus_)/2.0d0 + wCT(ixO^S,wAplus_)*Gamma_plus(ixO^S)) 
-
-      !> Kink wave evolution no reflection 
-      !w(ixO^S,wkplus_)  = w(ixO^S,wkplus_)  - qdt*(divv(ixO^S)*wCT(ixO^S,wkplus_)/2.d0  + wCT(ixO^S,wkplus_)**(3.d0/2.d0)/(wCT(ixO^S,rho_)*(1+ff*zeta(ixO^S)-ff)**(-1.d0))**0.5d0/Lperp(ixO^S))
-      !w(ixO^S,wkminus_) = w(ixO^S,wkminus_) - qdt*(divv(ixO^S)*wCT(ixO^S,wkminus_)/2.d0 + wCT(ixO^S,wkminus_)**(3.d0/2.d0)/(wCT(ixO^S,rho_)*(1+ff*zeta(ixO^S)-ff)**(-1.d0))**0.5d0/Lperp(ixO^S))
-
-      !!--- compute B magnitude and normalized B ---
-
+  
       if(B0field) then
         Bref(ixI^S,1:ndir)=wCT(ixI^S,mag(1:ndir))+block%B0(ixI^S,1:ndir,0) !> Magnetic field pertubations change the radius of flux tube
       else
@@ -3619,13 +3603,15 @@ contains
       call curlvector(v, ixI^L, ixO^L, curlv, idirmin, 1, 3)
 
       term2(ixO^S) = b_1(ixO^S)*curlv(ixO^S,1) + b_2(ixO^S)*curlv(ixO^S,2) + b_3(ixO^S)*curlv(ixO^S,3)
-      
+
       !!--- reflection magnitude and limiter / F-factor as before ---
       Rimb(ixO^S)  = dsqrt(term1(ixO^S)**2.d0 + term2(ixO^S)**2.d0) 
-      Rimbk(ixO^S) = dsqrt(term1k(ixO^S)**2.d0 + term2(ixO^S)**2.d0)
+      !Rimbk(ixO^S) = dsqrt(term1k(ixO^S)**2.d0 + term2(ixO^S)**2.d0)
 
-      !Rimb(ixO^S)  = dsqrt(term2(ixO^S)**2.d0) 
-      !Rimbk(ixO^S)  = dsqrt(term2(ixO^S)**2.d0) 
+      !Rimb(ixO^S)  = dsqrt(term2(ixO^S)**2.d0)
+
+      !> Rimbk not dependent on field aligned vorticity 
+      Rimbk(ixO^S)  = dsqrt(term1k(ixO^S)**2.d0) 
 
       !!> Compute the limit of reflection depending on dissipation rate
       Rlim(ixO^S)  = min(Rimb(ixO^S), max(Gamma_plus(ixO^S), Gamma_minus(ixO^S)))
@@ -3639,34 +3625,31 @@ contains
       eps_small = 1.0d-30
 
       F(ixO^S)=0.0d0
-      do ix3=ixOmin3,ixOmax3
-        do ix2=ixOmin2,ixOmax2
-          do ix1=ixOmin1,ixOmax1
-            if (4.0d0*(wCT(ix1,ix2,ix3,wAplus_)) <= wCT(ix1,ix2,ix3,wAminus_) .and. wCT(ix1,ix2,ix3,wAminus_) > eps_small) then
-              F(ix1,ix2,ix3) = 1.0d0 - 2.0d0*sqrt( wCT(ix1,ix2,ix3,wAplus_) / wCT(ix1,ix2,ix3,wAminus_))
-            elseif (4.0d0*wCT(ix1,ix2,ix3,wAminus_) <= wCT(ix1,ix2,ix3,wAplus_) .and. wCT(ix1,ix2,ix3,wAplus_) > eps_small) then
-              F(ix1,ix2,ix3) = 2.0d0*sqrt(wCT(ix1,ix2,ix3,wAminus_) / wCT(ix1,ix2,ix3,wAplus_)) - 1.0d0
-            endif
-          end do
-        end do
-      end do
+
+      where(wCT(ixO^S,wAminus_) > eps_small .and. 4.0d0*(wCT(ixO^S,wAplus_)) <= wCT(ixO^S,wAminus_))
+        F(ixO^S) = 1.0d0 - 2.0d0*sqrt( wCT(ixO^S,wAplus_) / wCT(ixO^S,wAminus_))
+      elsewhere(wCT(ixO^S,wAplus_) > eps_small .and. 4.0d0*wCT(ixO^S,wAminus_) <= wCT(ixO^S,wAplus_))
+        F(ixO^S) = 2.0d0*sqrt(wCT(ixO^S,wAminus_) / wCT(ixO^S,wAplus_)) - 1.0d0
+      endwhere
 
       Fk(ixO^S)=0.0d0
-      do ix3=ixOmin3,ixOmax3
-        do ix2=ixOmin2,ixOmax2
-          do ix1=ixOmin1,ixOmax1
-            if (4.0d0*(wCT(ix1,ix2,ix3,wkplus_)) <= wCT(ix1,ix2,ix3,wkminus_) .and. wCT(ix1,ix2,ix3,wkminus_) > eps_small) then
-              Fk(ix1,ix2,ix3) = 1.0d0 - 2.0d0*sqrt( wCT(ix1,ix2,ix3,wkplus_) / wCT(ix1,ix2,ix3,wkminus_))
-            elseif (4.0d0*wCT(ix1,ix2,ix3,wkminus_) <= wCT(ix1,ix2,ix3,wkplus_) .and. wCT(ix1,ix2,ix3,wkplus_) > eps_small) then
-              Fk(ix1,ix2,ix3) = 2.0d0*sqrt(wCT(ix1,ix2,ix3,wkminus_) / wCT(ix1,ix2,ix3,wkplus_)) - 1.0d0
-            endif
-          end do
-        end do
-      end do
+      where(wCT(ixO^S,wkminus_) > eps_small .and. 4.0d0*(wCT(ixO^S,wkplus_)) <= wCT(ixO^S,wkminus_))
+        Fk(ixO^S) = 1.0d0 - 2.0d0*sqrt( wCT(ixO^S,wkplus_) / wCT(ixO^S,wkminus_))
+      elsewhere(wCT(ixO^S,wkplus_) > eps_small .and. 4.0d0*wCT(ixO^S,wkminus_) <= wCT(ixO^S,wkplus_))
+        Fk(ixO^S) = 2.0d0*sqrt(wCT(ixO^S,wkminus_) / wCT(ixO^S,wkplus_)) - 1.0d0
+      endwhere
 
       !!--- final reflection coefficients ---
       Ref(ixO^S) = Rlim(ixO^S)  * F(ixO^S) 
       Refk(ixO^S)= Rlimk(ixO^S) * Fk(ixO^S)
+
+      !> AW evolution no reflection
+      !w(ixO^S,wAminus_) = w(ixO^S,wAminus_) - qdt*(divv(ixO^S)*wCT(ixO^S,wAminus_)/2.0d0 + wCT(ixO^S,wAminus_)*Gamma_minus(ixO^S)) 
+      !w(ixO^S,wAplus_)  = w(ixO^S,wAplus_)  - qdt*(divv(ixO^S)*wCT(ixO^S,wAplus_)/2.0d0 + wCT(ixO^S,wAplus_)*Gamma_plus(ixO^S)) 
+
+      !> Kink wave evolution no reflection 
+      !w(ixO^S,wkplus_)  = w(ixO^S,wkplus_)  - qdt*(divv(ixO^S)*wCT(ixO^S,wkplus_)/2.d0  + wCT(ixO^S,wkplus_)**(3.d0/2.d0)/(wCT(ixO^S,rho_)*(1+ff*zeta(ixO^S)-ff)**(-1.d0))**0.5d0/Lperp(ixO^S))
+      !w(ixO^S,wkminus_) = w(ixO^S,wkminus_) - qdt*(divv(ixO^S)*wCT(ixO^S,wkminus_)/2.d0 + wCT(ixO^S,wkminus_)**(3.d0/2.d0)/(wCT(ixO^S,rho_)*(1+ff*zeta(ixO^S)-ff)**(-1.d0))**0.5d0/Lperp(ixO^S))
 
       !!> Kink wave evolution with reflection
       w(ixO^S,wkminus_) = w(ixO^S,wkminus_) - qdt*(divv(ixO^S)*wCT(ixO^S,wkminus_)/2.d0 + wCT(ixO^S,wkminus_)**(3.d0/2.d0)/(wCT(ixO^S,rho_)*(1+ff*zeta(ixO^S)-ff)**(-1.d0))**0.5d0/Lperp(ixO^S) + Refk(ixO^S)*(wCT(ixO^S,wkminus_)*wCT(ixO^S,wkplus_))**0.5d0) 
@@ -3674,9 +3657,17 @@ contains
     
       !!> AW evolution with reflection
       w(ixO^S,wAminus_) = w(ixO^S,wAminus_) - qdt*(divv(ixO^S)*wCT(ixO^S,wAminus_)/2.0d0 + wCT(ixO^S,wAminus_)*Gamma_minus(ixO^S)+ Ref(ixO^S)*(wCT(ixO^S,wAminus_)*wCT(ixO^S,wAplus_))**0.5d0) 
-      w(ixO^S,wAplus_)  = w(ixO^S,wAplus_)  - qdt*(divv(ixO^S)*wCT(ixO^S,wAplus_)/2.0d0 + wCT(ixO^S,wAplus_)*Gamma_plus(ixO^S)- Ref(ixO^S)*(wCT(ixO^S,wAminus_)*wCT(ixO^S,wAplus_))**0.5d0) 
-    endif
+      w(ixO^S,wAplus_)  = w(ixO^S,wAplus_)  - qdt*(divv(ixO^S)*wCT(ixO^S,wAplus_)/2.0d0 + wCT(ixO^S,wAplus_)*Gamma_plus(ixO^S) - Ref(ixO^S)*(wCT(ixO^S,wAminus_)*wCT(ixO^S,wAplus_))**0.5d0) 
 
+      if (uawsom_internal_e) then !> MAX UPDATE: Internal energy not affected by function(zeta)*Pk*divv (residual term)
+        w(ixO^S,e_)=w(ixO^S,e_)+ qdt*(wCT(ixO^S,wAminus_)*Gamma_minus(ixO^S) &
+                              +wCT(ixO^S,wAplus_)*Gamma_plus(ixO^S)+ wCT(ixO^S,wkplus_)**(3.d0/2.d0)/(wCT(ixO^S,rho_)*(1+ff*zeta(ixO^S)-ff)**(-1.d0))**0.5d0/Lperp(ixO^S) &
+                              +wCT(ixO^S,wkminus_)**(3.d0/2.d0)/(wCT(ixO^S,rho_)*(1+ff*zeta(ixO^S)-ff)**(-1.d0))**0.5d0/Lperp(ixO^S))                              
+      else
+        !> MAX UPDATE: I think this should be + and not -
+        w(ixO^S,e_) = w(ixO^S,e_)+qdt*(zeta(ixO^S)-1.d0)/(zeta(ixO^S)+1.d0)*(zeta(ixO^S)+1.d0)*(wCT(ixO^S,wkplus_) + wCT(ixO^S,wkminus_))/4.d0*divv(ixO^S) 
+      end if
+    endif
   end subroutine w_add_source
 
   !> Compute the Lorentz force (JxB)
@@ -3706,28 +3697,15 @@ contains
     call cross_product(ixI^L,ixO^L,a,b,JxB)
   end subroutine get_Lorentz_force
 
-  subroutine internal_energy_add_source(qdt,ixI^L,ixO^L,wCT,w,x,ie,qsourcesplit,active)
+  subroutine internal_energy_add_source(qdt,ixI^L,ixO^L,wCT,w,x,ie)
     use mod_global_parameters
     use mod_geometry
-    use, intrinsic :: ieee_arithmetic
 
     integer, intent(in)             :: ixI^L, ixO^L,ie
     double precision, intent(in)    :: qdt
     double precision, intent(in)    :: wCT(ixI^S,1:nw), x(ixI^S,1:ndim)
     double precision, intent(inout) :: w(ixI^S,1:nw)
-    logical, intent(in)             :: qsourcesplit
-    logical, intent(inout)          :: active
     double precision                :: v(ixI^S,1:ndir),divv(ixI^S)
-    double precision                :: Bmag(ixI^S), B0(ixI^S,3)
-    double precision                :: Lperp(ixI^S),Lperp_AW(ixI^S),Gamma_minus(ixI^S),Gamma_plus(ixI^S),radius(ixI^S),zeta(ixI^S),B(ixI^S,3)
-    double precision :: Bref(ixI^S,3), Bmagref(ixI^S), vA(ixI^S), vk(ixI^S), lnvA(ixI^S), lnvk(ixI^S), b_1(ixI^S), b_2(ixI^S), b_3(ixI^S)
-    double precision :: d_lnvA_1(ixI^S), d_lnvA_2(ixI^S), d_lnvA_3(ixI^S), d_lnvk_1(ixI^S), d_lnvk_2(ixI^S), d_lnvk_3(ixI^S), term1(ixI^S)
-    double precision :: term1k(ixI^S), v_r(ixI^S), v_theta(ixI^S), v_phi(ixI^S), term2(ixI^S), curlv(ixI^S,1:ndir)
-    double precision :: Fk(ixI^S),Ref(ixI^S),Refk(ixI^S),Rimb(ixI^S),Rimbk(ixI^S),Rlim(ixI^S),Rlimk(ixI^S),F(ixI^S),eps_small
-    
-    double precision :: dxa^D, startpos^D, xlen1, xlen2, xlen3, ixbc^D
-    integer          :: ix^D, idirmin, ngl
-
 
     call uawsom_get_v(wCT,x,ixI^L,ixI^L,v)
     if(slab_uniform) then
@@ -3739,140 +3717,7 @@ contains
     else
      call divvector(v,ixI^L,ixO^L,divv)
     end if
-
-    if(B0field) then
-      B(ixI^S,1:ndir)=wCT(ixI^S,mag(1:ndir))+block%B0(ixI^S,1:ndir,0) 
-    else
-      B(ixI^S,1:ndir)=wCT(ixI^S,mag(1:ndir)) 
-    end if
-
-    Bmag(ixO^S) = (B(ixO^S,1)**2.d0 + B(ixO^S,2)**2 + B(ixO^S,3)**2)**0.5d0
-    
-    radius(ixO^S) = 1.d8/unit_length * (0.5d0/Bmag(ixO^S))**0.5d0 !> for lmax = 5 with low res run 24x48x96, <|B_surf|> = 0.53 (unit_B)
-                                                                   !> For dipole been using ~10 in c.u or 20 Gauss 
-    !> Max todo: Could potentially do <|B_surf|> here to account for numerical diffusion in surface magnetic field? 
-
-    if(qsourcesplit .eqv. .false.) then
-      active = .true.
-  
-      call get_zeta(w,x,ixI^L,ixI^L,zeta)
-      
-      Lperp(ixO^S) = (zeta(ixO^S) + 1.d0 - ff)**(3.d0/2.d0)/(1.d0 - ff**(5.d0/2.d0))/&
-                    (zeta(ixO^S) - 1.d0)*3.1622776*(ff*dpi)**0.5d0*radius(ixO^S)
-
-      Lperp_AW(ixO^S) = 0.05d0*(1.0d0/Bmag(ixO^S))**0.5d0 !> Cooper Downs Lperp_AW fix 2.d0 to base B
-
-      Gamma_plus(ixO^S) = (2.0d0 / Lperp_AW(ixO^S)) * (wCT(ixO^S, wAminus_)/wCT(ixO^S,rho_))**0.5d0 
-      Gamma_minus(ixO^S) = (2.0d0 / Lperp_AW(ixO^S)) * (wCT(ixO^S, wAplus_)/wCT(ixO^S,rho_))**0.5d0
-
-      w(ixO^S,ie)=w(ixO^S,ie)-qdt*wCT(ixO^S,ie)*gamma_1*divv(ixO^S) + qdt*(wCT(ixO^S,wAminus_)*Gamma_minus(ixO^S) &
-                            +wCT(ixO^S,wAplus_)*Gamma_plus(ixO^S)+ wCT(ixO^S,wkplus_)**(3.d0/2.d0)/(wCT(ixO^S,rho_)*(1+ff*zeta(ixO^S)-ff)**(-1.d0))**0.5d0/Lperp(ixO^S) &
-                            +wCT(ixO^S,wkminus_)**(3.d0/2.d0)/(wCT(ixO^S,rho_)*(1+ff*zeta(ixO^S)-ff)**(-1.d0))**0.5d0/Lperp(ixO^S)) &
-                            -qdt*(zeta(ixO^S)-1.d0)/(zeta(ixO^S)+1.d0)*(zeta(ixO^S)+1.d0)*(wCT(ixO^S,wkplus_) + wCT(ixO^S,wkminus_))/4.d0*divv(ixO^S)
-
-      !> AW evolution no reflection
-      !w(ixO^S,wAminus_) = w(ixO^S,wAminus_) - qdt*(divv(ixO^S)*wCT(ixO^S,wAminus_)/2.0d0 + wCT(ixO^S,wAminus_)*Gamma_minus(ixO^S)) 
-      !w(ixO^S,wAplus_)  = w(ixO^S,wAplus_)  - qdt*(divv(ixO^S)*wCT(ixO^S,wAplus_)/2.0d0 + wCT(ixO^S,wAplus_)*Gamma_plus(ixO^S)) 
-
-      !> Kink wave evolution no reflection 
-      !w(ixO^S,wkplus_)  = w(ixO^S,wkplus_)  - qdt*(divv(ixO^S)*wCT(ixO^S,wkplus_)/2.d0  + wCT(ixO^S,wkplus_)**(3.d0/2.d0)/(wCT(ixO^S,rho_)*(1+ff*zeta(ixO^S)-ff)**(-1.d0))**0.5d0/Lperp(ixO^S))
-      !w(ixO^S,wkminus_) = w(ixO^S,wkminus_) - qdt*(divv(ixO^S)*wCT(ixO^S,wkminus_)/2.d0 + wCT(ixO^S,wkminus_)**(3.d0/2.d0)/(wCT(ixO^S,rho_)*(1+ff*zeta(ixO^S)-ff)**(-1.d0))**0.5d0/Lperp(ixO^S))
-
-      !!--- compute B magnitude and normalized B ---
-
-      if(B0field) then
-        Bref(ixI^S,1:ndir)=wCT(ixI^S,mag(1:ndir))+block%B0(ixI^S,1:ndir,0) !> Magnetic field pertubations change the radius of flux tube
-      else
-        Bref(ixI^S,1:ndir)=wCT(ixI^S,mag(1:ndir)) 
-      end if
-
-      Bmagref(ixI^S) = sqrt(Bref(ixI^S,1)**2 + Bref(ixI^S,2)**2 + Bref(ixI^S,3)**2)
-
-      vA(ixI^S) = Bmagref(ixI^S) / dsqrt(wCT(ixI^S,rho_))
-      vk(ixI^S) = Bmagref(ixI^S) / dsqrt(0.5d0*wCT(ixI^S,rho_)*(1+zeta(ixI^S))*((1+ff*zeta(ixI^S)-ff)**(-1.d0)))
-
-      lnvA(ixI^S) = log(vA(ixI^S))
-      lnvk(ixI^S) = log(vk(ixI^S))
-
-      b_1(ixI^S) = Bref(ixI^S,1) / Bmagref(ixI^S)  ! b_r
-      b_2(ixI^S) = Bref(ixI^S,2) / Bmagref(ixI^S)  ! b_theta
-      b_3(ixI^S) = Bref(ixI^S,3) / Bmagref(ixI^S)  ! b_phi
-
-      !!--- gradients of log(V_A) and log(V_k) in all 3 directions ---
-      call gradient(lnvA, ixI^L, ixO^L, 1, d_lnvA_1)  ! = d lnV / dr
-      call gradient(lnvA, ixI^L, ixO^L, 2, d_lnvA_2)  ! = (1/r) d lnV / dtheta
-      call gradient(lnvA, ixI^L, ixO^L, 3, d_lnvA_3)  ! = (1/(r sin theta)) d lnV / dphi
-
-      call gradient(lnvk, ixI^L, ixO^L, 1, d_lnvk_1)
-      call gradient(lnvk, ixI^L, ixO^L, 2, d_lnvk_2)
-      call gradient(lnvk, ixI^L, ixO^L, 3, d_lnvk_3)
-
-      !!--- directional derivative along V_A,k ---
-      term1(ixO^S)  = vA(ixO^S)*(b_1(ixO^S)*d_lnvA_1(ixO^S) + b_2(ixO^S)*d_lnvA_2(ixO^S) + b_3(ixO^S)*d_lnvA_3(ixO^S))
-      term1k(ixO^S) = vk(ixO^S)*(b_1(ixO^S)*d_lnvk_1(ixO^S) + b_2(ixO^S)*d_lnvk_2(ixO^S) + b_3(ixO^S)*d_lnvk_3(ixO^S))
-
-      call uawsom_get_v(wCT,x,ixI^L,ixI^L,v)
-      call curlvector(v, ixI^L, ixO^L, curlv, idirmin, 1, 3)
-
-      term2(ixO^S) = b_1(ixO^S)*curlv(ixO^S,1) + b_2(ixO^S)*curlv(ixO^S,2) + b_3(ixO^S)*curlv(ixO^S,3)
-      
-      !!--- reflection magnitude and limiter / F-factor as before ---
-      Rimb(ixO^S)  = dsqrt(term1(ixO^S)**2.d0 + term2(ixO^S)**2.d0) 
-      Rimbk(ixO^S) = dsqrt(term1k(ixO^S)**2.d0 + term2(ixO^S)**2.d0)
-
-      !Rimb(ixO^S)  = dsqrt(term2(ixO^S)**2.d0) 
-      !Rimbk(ixO^S)  = dsqrt(term2(ixO^S)**2.d0) 
-
-      !!> Compute the limit of reflection depending on dissipation rate
-      Rlim(ixO^S)  = min(Rimb(ixO^S), max(Gamma_plus(ixO^S), Gamma_minus(ixO^S)))
-      Rlimk(ixO^S) = min(Rimbk(ixO^S), max(wCT(ixO^S,wkplus_)**(1.d0/2.d0)/(wCT(ixO^S,rho_)*(1+ff*zeta(ixO^S)-ff)**(-1.d0))**0.5d0/Lperp(ixO^S), &
-                                            wCT(ixO^S,wkminus_)**(1.d0/2.d0)/(wCT(ixO^S,rho_)*(1+ff*zeta(ixO^S)-ff)**(-1.d0))**0.5d0/Lperp(ixO^S)))
-
-      !!--- compute F and Fk in 3D loops (same logic as 2.5D but over ix1,ix2,ix3) ---
-      !!> Note: AWSoM equations assume w+ propagates with the field and w- against it.
-      !!>       So, the wA+- will appear below the opposite to the equations in e.g., VDH2014
-
-      eps_small = 1.0d-30
-
-      F(ixO^S)=0.0d0
-      do ix3=ixOmin3,ixOmax3
-        do ix2=ixOmin2,ixOmax2
-          do ix1=ixOmin1,ixOmax1
-            if (4.0d0*(wCT(ix1,ix2,ix3,wAplus_)) <= wCT(ix1,ix2,ix3,wAminus_) .and. wCT(ix1,ix2,ix3,wAminus_) > eps_small) then
-              F(ix1,ix2,ix3) = 1.0d0 - 2.0d0*sqrt( wCT(ix1,ix2,ix3,wAplus_) / wCT(ix1,ix2,ix3,wAminus_))
-            elseif (4.0d0*wCT(ix1,ix2,ix3,wAminus_) <= wCT(ix1,ix2,ix3,wAplus_) .and. wCT(ix1,ix2,ix3,wAplus_) > eps_small) then
-              F(ix1,ix2,ix3) = 2.0d0*sqrt(wCT(ix1,ix2,ix3,wAminus_) / wCT(ix1,ix2,ix3,wAplus_)) - 1.0d0
-            endif
-          end do
-        end do
-      end do
-
-      Fk(ixO^S)=0.0d0
-      do ix3=ixOmin3,ixOmax3
-        do ix2=ixOmin2,ixOmax2
-          do ix1=ixOmin3,ixOmax1
-            if (4.0d0*(wCT(ix1,ix2,ix3,wkplus_)) <= wCT(ix1,ix2,ix3,wkminus_) .and. wCT(ix1,ix2,ix3,wkminus_) > eps_small) then
-              Fk(ix1,ix2,ix3) = 1.0d0 - 2.0d0*sqrt( wCT(ix1,ix2,ix3,wkplus_) / wCT(ix1,ix2,ix3,wkminus_))
-            elseif (4.0d0*wCT(ix1,ix2,ix3,wkminus_) <= wCT(ix1,ix2,ix3,wkplus_) .and. wCT(ix1,ix2,ix3,wkplus_) > eps_small) then
-              Fk(ix1,ix2,ix3) = 2.0d0*sqrt(wCT(ix1,ix2,ix3,wkminus_) / wCT(ix1,ix2,ix3,wkplus_)) - 1.0d0
-            endif
-          end do
-        end do
-      end do
-
-      !!--- final reflection coefficients ---
-      Ref(ixO^S) = Rlim(ixO^S)  * F(ixO^S) 
-      Refk(ixO^S)= Rlimk(ixO^S) * Fk(ixO^S)
-
-      !!> Kink wave evolution with reflection
-      w(ixO^S,wkminus_) = w(ixO^S,wkminus_) - qdt*(divv(ixO^S)*wCT(ixO^S,wkminus_)/2.d0 + wCT(ixO^S,wkminus_)**(3.d0/2.d0)/(wCT(ixO^S,rho_)*(1+ff*zeta(ixO^S)-ff)**(-1.d0))**0.5d0/Lperp(ixO^S) + Refk(ixO^S)*(wCT(ixO^S,wkminus_)*wCT(ixO^S,wkplus_))**0.5d0) 
-      w(ixO^S,wkplus_)  = w(ixO^S,wkplus_)  - qdt*(divv(ixO^S)*wCT(ixO^S,wkplus_)/2.d0  + wCT(ixO^S,wkplus_)**(3.d0/2.d0)/(wCT(ixO^S,rho_)*(1+ff*zeta(ixO^S)-ff)**(-1.d0))**0.5d0/Lperp(ixO^S) - Refk(ixO^S)*(wCT(ixO^S,wkminus_)*wCT(ixO^S,wkplus_))**0.5d0) 
-    
-      !!> AW evolution with reflection
-      w(ixO^S,wAminus_) = w(ixO^S,wAminus_) - qdt*(divv(ixO^S)*wCT(ixO^S,wAminus_)/2.0d0 + wCT(ixO^S,wAminus_)*Gamma_minus(ixO^S) + Ref(ixO^S)*(wCT(ixO^S,wAminus_)*wCT(ixO^S,wAplus_))**0.5d0) 
-      w(ixO^S,wAplus_)  = w(ixO^S,wAplus_)  - qdt*(divv(ixO^S)*wCT(ixO^S,wAplus_)/2.0d0 + wCT(ixO^S,wAplus_)*Gamma_plus(ixO^S) - Ref(ixO^S)*(wCT(ixO^S,wAminus_)*wCT(ixO^S,wAplus_))**0.5d0) 
-    endif
-
+    w(ixO^S,ie)=w(ixO^S,ie)-qdt*wCT(ixO^S,ie)*gamma_1*divv(ixO^S)
     if(uawsom_ambipolar)then
        call add_source_ambipolar_internal_energy(qdt,ixI^L,ixO^L,wCT,w,x,ie)
     end if
@@ -3901,9 +3746,7 @@ contains
     double precision, intent(in)  :: w(ixI^S,1:nw),x(ixI^S,1:ndim)
     double precision, intent(out) :: zeta(ixI^S) !, zeta_base(ixI^S)
     
-    !zeta_base(ixI^S) = spatially_varying_function !> MAX TODO: Should density contrast be larger closer to poles or equator? e.g., [2-10] range with 6 + 4*sin(pole_to_pole)?
-
-    zeta(ixI^S) = (zeta0-1.d0)*exp(-(x(ixI^S,1)-xprobmin1)/5.d0)+1.d0 !> MAX: Open field MAX TODO: Should we have a better representation for this expansion with distance along a field line rather than just height? 
+    zeta(ixI^S) = (zeta0-1.d0)*exp(-(x(ixI^S,1)-xprobmin1)/(5.d0*6.961d10/unit_length))+1.d0 
       
   end subroutine get_zeta
 
@@ -6287,3 +6130,4 @@ contains
   end subroutine b_from_vector_potential
 
 end module mod_uawsom_phys
+
