@@ -1318,7 +1318,7 @@ module mod_radiative_cooling
 
       zeta0 = 5.0d0
 
-      zeta(ixI^S) = (zeta0-1.d0)*exp(-(x(ixI^S,1)-xprobmin1)/5.d0)+1.d0 !> MAX: Open field regions
+      zeta(ixI^S) = (zeta0-1.d0)*exp(-(x(ixI^S,1)-xprobmin1)/(5.d0*6.961d10/unit_length))+1.d0 
       !zeta(ixI^S) = (zeta0-1.d0)*exp(-((xprobmax1-xprobmin1)/dpi * sin(dpi * (x(ixI^S,1)-xprobmin1)/(xprobmax1-xprobmin1)))/5.d0)+1.d0 !> MAX: 1D Loops
     end subroutine get_zeta
 
